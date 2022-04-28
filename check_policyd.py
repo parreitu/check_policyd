@@ -61,9 +61,6 @@ check_since = int(now_unixepoch) - ( how_many_minutes_to_check * 60 )
 
 con = sqlite3.connect(sqlitedb)
 cur = con.cursor()
-cur.execute('SELECT QuotasLimitsID, TrackKey, LastUpdate, Counter from quotas_tracking WHERE counter >' + alert_percent_limit + ' and LastUpdate > ' + str(check_since))
-
-
 cur.execute(
   "SELECT QT.TrackKey, datetime(QT.LastUpdate, 'unixepoch', 'localtime'), QT.Counter * 100 / QL.CounterLimit, Q.name,QT.Counter,QL.CounterLimit " +
   " FROM quotas_tracking QT " +
