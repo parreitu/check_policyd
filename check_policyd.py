@@ -25,12 +25,12 @@ telegram_bottoken = "mytelegrambottoken"
 telegram_chatid = "mychatid"
 
 
-
 def send_alerts():
 
     body = " ALERTS SINCE: " + str(datetime.fromtimestamp(check_since))
     for key, value in alerts_dict.items():
         body = body + '\n\n' + '===============' + key   + '====================' + "\n"
+        body = body + '\n' + 'email, datetime, quota-percent, quota-name, sent-counter, quota-limit' + "\n"
         for item in value:
             body = body + str(item) + "\n"
 
@@ -42,18 +42,17 @@ def send_alerts():
         msg['To'] = ", ".join(receivers)
 
         try:
-            smtpObj = smtplib.SMTP(smtp_server)
-            smtpObj.set_debuglevel(1)
-            smtpObj.sendmail(sender, receivers, msg.as_string())
-            # print ("Successfully sent email")
+           smtpObj = smtplib.SMTP(smtp_server)
+           smtpObj.set_debuglevel(1)
+           smtpObj.sendmail(sender, receivers, msg.as_string())
+           # print ("Successfully sent email")
         #except :
-            # print ("Error: unable to send email")
+           # print ("Error: unable to send email")
         finally:
-            smtpObj.quit()
+           smtpObj.quit()
 
     if send_telegram:
         requests.get("https://api.telegram.org/bot"+telegram_bottoken+"/sendMessage?chat_id=" + telegram_chatid + "&text=" + body)
-
 
 
 now = datetime.now() # current date and time
@@ -64,22 +63,26 @@ con = sqlite3.connect(sqlitedb)
 cur = con.cursor()
 cur.execute('SELECT QuotasLimitsID, TrackKey, LastUpdate, Counter from quotas_tracking WHERE counter >' + alert_percent_limit + ' and LastUpdate > ' + str(check_since))
 
+
+cur.execute(
+  "SELECT QT.TrackKey, datetime(QT.LastUpdate, 'unixepoch', 'localtime'), QT.Counter * 100 / QL.CounterLimit, Q.name,QT.Counter,QL.CounterLimit " +
+  " FROM quotas_tracking QT " +
+  " JOIN quotas_limits QL ON QL.ID = QT.QuotasLimitsID " +
+  " JOIN quotas Q on Q.ID = QL.QuotasID " +
+  
+  " WHERE QT.Counter * 100 / QL.CounterLimit >" + alert_percent_limit + " and QT.LastUpdate> " + str(check_since) 
+ )
+
 quotas_tracking = []
 for i in cur.fetchall():
-#    print(i)
-    email = i[1].split(":", 1)[1]
-    quotas_tracking.append([i[0], email, str(datetime.fromtimestamp(i[2])), i[3]])
-
-alerts_list = []
-for i in quotas_tracking:
-    cur.execute('SELECT Q.name FROM  quotas Q JOIN quotas_limits QL ON  Q.ID = QL.QuotasID  WHERE QL.ID = ' + str(i[0]))
-    group_name = cur.fetchone()[0] # quota group name
-    percent = "%"+str(round(i[3],2)) # quota limit percent
-    alerts_list.append([ i[1], i[2], percent, group_name ] )
+    # print(i)
+    email = i[0].split(":", 1)[1]
+    percent_str = "%"+str(round(i[2],2))
+    quotas_tracking.append([email, i[1], percent_str, i[3], i[4], i[5] ] ) # [user-email,datetime,percent,quota-name,counter,counterlimit]
 
 alerts_dict = {} 
 
-for item in alerts_list:
+for item in quotas_tracking:
     # print(item)
     user_email = str(item[0])
     if not user_email in alerts_dict:
@@ -90,6 +93,7 @@ for item in alerts_list:
 
 #for key, value in alerts_dict.items():
 #    print('===============' + key   + '====================')
+#    print('email, datetime, quota-percent, quota-name, sent-counter, quota-limit')
 #    for item in value:
 #        print(item)
 
